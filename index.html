@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DB Produktdaten Vergleich</title>
+  <style>
+    :root{
+      --db-red:#D40511;
+      --gray-900:#1f2937;
+      --gray-500:#6b7280;
+      --gray-200:#e5e7eb;
+      --white:#ffffff;
+    }
+    html,body{height:100%;margin:0;background:var(--white);color:var(--gray-900);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center}
+    .panel{width:100%;max-width:560px;padding:32px;border:1px solid var(--gray-200);border-radius:12px}
+    h1{margin:0 0 8px 0;font-weight:600;font-size:22px;letter-spacing:.2px;text-align:center}
+    .bar{height:3px;background:var(--db-red);border-radius:3px;margin:8px auto 20px auto;max-width:120px}
+    .upload{border:2px dashed var(--gray-200);border-radius:10px;padding:28px;text-align:center;cursor:pointer}
+    .upload:hover{border-color:var(--db-red)}
+    input[type="file"]{display:none}
+    .row{display:flex;gap:10px;justify-content:center;margin-top:16px}
+    .btn{appearance:none;border:none;border-radius:10px;padding:12px 18px;font-weight:600;cursor:pointer}
+    .btn-primary{background:var(--db-red);color:#fff}
+    .btn-secondary{background:#374151;color:#fff}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .hint{margin-top:18px;text-align:center;color:var(--gray-500);font-size:14px}
+    .filename{margin-top:10px;text-align:center;color:var(--gray-500);font-size:14px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>DB Produktdaten&nbsp;Vergleich</h1>
+      <div class="bar"></div>
+
+      <label class="upload" id="drop">
+        <input id="file" type="file" accept=".xlsx,.xls"/>
+        <div id="droptext">Excel-Datei auswählen oder hier ablegen</div>
+      </label>
+      <div class="filename" id="filename">Keine Datei gewählt</div>
+
+      <div class="row">
+        <button id="process" class="btn btn-primary" disabled>Verarbeiten</button>
+        <button id="download" class="btn btn-secondary" disabled>Herunterladen</button>
+      </div>
+
+      <div class="hint">Farbmarkierung in der Ergebnis-Excel: <strong>Grün</strong> = gleich, <strong>Rot</strong> = abweichend, <strong>Orange</strong> = unklar.</div>
+    </div>
+  </div>
+
+  <script>
+    const drop = document.getElementById('drop');
+    const input = document.getElementById('file');
+    const btnProcess = document.getElementById('process');
+    const btnDownload = document.getElementById('download');
+    const filename = document.getElementById('filename');
+
+    let file = null;
+    let lastBlob = null;
+
+    drop.addEventListener('click', ()=> input.click());
+    drop.addEventListener('dragover', (e)=>{ e.preventDefault(); drop.style.borderColor='#9ca3af'; });
+    drop.addEventListener('dragleave', ()=> drop.style.borderColor='var(--gray-200)');
+    drop.addEventListener('drop', (e)=>{
+      e.preventDefault();
+      drop.style.borderColor='var(--gray-200)';
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', ()=> input.files.length && setFile(input.files[0]));
+
+    function setFile(f){
+      if(!/\.(xlsx|xls)$/i.test(f.name)){ alert('Bitte .xlsx oder .xls wählen'); return; }
+      file = f; filename.textContent = `Gewählt: ${f.name}`;
+      btnProcess.disabled = false; btnDownload.disabled = true; lastBlob = null;
+    }
+
+    btnProcess.addEventListener('click', async ()=>{
+      if(!file) return;
+      btnProcess.disabled = true;
+      const fd = new FormData(); fd.append('file', file);
+      try{
+        const resp = await fetch('/api/process-excel', { method:'POST', body: fd });
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        lastBlob = await resp.blob();
+        btnDownload.disabled = false;
+      }catch(e){
+        alert('Fehler bei der Verarbeitung: ' + e.message);
+      }finally{
+        btnProcess.disabled = false;
+      }
+    });
+
+    btnDownload.addEventListener('click', ()=>{
+      if(!lastBlob){ alert('Bitte zuerst verarbeiten.'); return; }
+      const url = URL.createObjectURL(lastBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'DB_Produktvergleich_verarbeitet.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=> URL.revokeObjectURL(url), 1500);
+    });
+  </script>
+</body>
+</html>
